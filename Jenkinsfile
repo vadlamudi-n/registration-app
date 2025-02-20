@@ -25,7 +25,6 @@ pipeline {
         stage("Build Application") {
             steps {
                 sh "mvn clean package"
-                sh "ls -la target" // Verify the .war file exists
             }
         }
         stage("Test Application") {
