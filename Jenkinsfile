@@ -51,7 +51,7 @@ pipeline {
         stage("Build & Push Docker Image") {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', 'Jenkins-Agent') {
+                    docker.withRegistry('https://index.docker.io/v1/', 'jenkins-sonar-token') {
                         docker_image = docker.build(IMAGE_NAME)
                         docker_image.push("${IMAGE_TAG}")
                         docker_image.push("latest")
