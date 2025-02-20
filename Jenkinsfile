@@ -49,19 +49,21 @@ pipeline {
             }
         }
         stage("Build & Push Docker Image") {
-    steps {
-        script {
-            withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                sh "cp target/*.war ."  // Copy WAR file to root directory
-                sh "ls -la"  // Verify WAR file is present
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ."
-                sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                sh "docker push ${IMAGE_NAME}:latest"
+            steps {
+                script {
+                    docker.withRegistry('',DOCKER_PASS) {
+                        docker_image = docker.build "${IMAGE_NAME}"
+                    }
+
+                    docker.withRegistry('',DOCKER_PASS) {
+                        docker_image.push("${IMAGE_TAG}")
+                        docker_image.push('latest')
+                    }
+                }
             }
-        }
-    }
-}
+
+       }
+
 
         stage("Trivy Scan") {
             steps {
