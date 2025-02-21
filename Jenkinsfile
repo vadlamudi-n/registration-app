@@ -8,6 +8,7 @@ pipeline {
         APP_NAME = "register-app-pipeline"
         RELEASE = "1.0.0"
         DOCKER_USER = "bhargav170617"
+        DOCKER_PASS = credentials('docker_credentials')  // Use correct credentials ID
         IMAGE_NAME = "${DOCKER_USER}/${APP_NAME}"
         IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
     }
@@ -17,7 +18,7 @@ pipeline {
                 cleanWs()
             }
         }
-        stage("Check From SCM") {
+        stage("Checkout Code from SCM") {
             steps {
                 git branch: 'main', credentialsId: 'github', url: 'https://github.com/vadlamudi-n/registration-app.git'
             }
@@ -25,6 +26,11 @@ pipeline {
         stage("Build Application") {
             steps {
                 sh "mvn clean package"
+            }
+        }
+        stage("Check Generated Files") {
+            steps {
+                sh "ls -l target/"  // Debugging step to verify if the WAR file exists
             }
         }
         stage("Test Application") {
@@ -48,8 +54,7 @@ pipeline {
                 }
             }
         }
-        
-        stage('Login to Docker') {
+        stage("Login to Docker") {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'docker_credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -58,34 +63,31 @@ pipeline {
                 }
             }
         }
-
         stage("Build & Push Docker Image") {
             steps {
                 script {
-                    def docker_image = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
+                    sh "ls -l target/"  // Debugging: Ensure the WAR file exists before COPY step
+                    dockerImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}")
 
-                    withCredentials([usernamePassword(credentialsId: 'docker_credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh "docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest"
-                        sh "docker push ${IMAGE_NAME}:${IMAGE_TAG}"
-                        sh "docker push ${IMAGE_NAME}:latest"
+                    docker.withRegistry('', 'docker_credentials') { // Use correct credentials ID
+                        dockerImage.push("${IMAGE_TAG}")
+                        dockerImage.push('latest')
                     }
                 }
             }
         }
-
         stage("Trivy Scan") {
             steps {
                 script {
-                    sh "docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ${IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table"
+                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image ${IMAGE_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table"
                 }
             }
         }
-        
         stage("Cleanup Artifacts") {
             steps {
                 script {
-                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                    sh "docker rmi ${IMAGE_NAME}:latest"
+                    sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+                    sh "docker rmi ${IMAGE_NAME}:latest || true"
                 }
             }
         }
